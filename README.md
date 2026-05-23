@@ -6,6 +6,16 @@
 Basicamente alterar a variável de ambiente PATH no windows e adicionar o local onde está localizado o mygit.py do seu pc. Além disso, alterar o endereço no mygit.bat pra facilitar.
 Dessa forma, será possível basicamente botar mygit no terminal e irá funcionar direito.
 
+Para ter interação com o GDrive, precisa instalar a seguinte biblioteca:
+```
+# Biblioteca
+pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib
+
+# Guia de setup de comunicação com repositório do GDrive:
+python mygit.py gdrive-setup
+```
+
+
 ## O que faz?
 Suporte aos seguintes comandos no terminal:
 ```bash
