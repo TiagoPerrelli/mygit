@@ -5,6 +5,8 @@
 ## Setup
 Basicamente alterar a variável de ambiente path e adicionar o local onde está localizado o mygit.py do seu pc. Além disso, alterar o endereço no mygit.bat pra facilitar.
 Dessa forma, será possível basicamente botar mygit no terminal e irá funcionar direito.
+
+## O que faz?
 Suporte aos seguintes comandos no terminal:
 ```python
 mygit init --author "Seu Nome"
