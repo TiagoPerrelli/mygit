@@ -3,7 +3,7 @@
 É um projeto individual que fiquei com o interesse de ver se consigo recriar o git de uma forma simplificada. Ele será para uso pessoal, de acordo com minhas preferências.
 
 ## Setup
-Basicamente alterar a variável de ambiente path e adicionar o local onde está localizado o mygit.py do seu pc. Além disso, alterar o endereço no mygit.bat pra facilitar.
+Basicamente alterar a variável de ambiente PATH no windows e adicionar o local onde está localizado o mygit.py do seu pc. Além disso, alterar o endereço no mygit.bat pra facilitar.
 Dessa forma, será possível basicamente botar mygit no terminal e irá funcionar direito.
 
 ## O que faz?
