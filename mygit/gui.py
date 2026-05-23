@@ -258,6 +258,7 @@ class FilesTab(tk.Frame):
         self.add_entry.pack(side="left", padx=(0, 8))
         styled_button(row1, "Procurar", self._browse_add).pack(side="left", padx=4)
         styled_button(row1, "Add", self._do_add).pack(side="left", padx=4)
+        styled_button(row1, "Add Tudo (.)", self._do_add_all, color=YELLOW).pack(side="left", padx=4)
 
         # Commit
         s2 = section_frame(self, "Commit")
@@ -301,6 +302,12 @@ class FilesTab(tk.Frame):
             messagebox.showwarning("mygit", "Informe o arquivo."); return
         try:
             _output(self.out, repo.add(path), GREEN)
+        except FileNotFoundError as e:
+            _output(self.out, str(e), RED)
+
+    def _do_add_all(self):
+        try:
+            _output(self.out, repo.add("."), GREEN)
         except FileNotFoundError as e:
             _output(self.out, str(e), RED)
 
@@ -412,11 +419,116 @@ def launch_gui():
     nb = ttk.Notebook(root)
     nb.pack(fill="both", expand=True, padx=12, pady=12)
 
-    nb.add(RepoTab(nb),   text="  Repositório  ")
-    nb.add(FilesTab(nb),  text="  Arquivos  ")
-    nb.add(RemoteTab(nb), text="  Remoto  ")
+    nb.add(RepoTab(nb),    text="  Repositório  ")
+    nb.add(FilesTab(nb),   text="  Arquivos  ")
+    nb.add(RemoteTab(nb),  text="  Remoto Local  ")
+    nb.add(GDriveTab(nb),  text="  Google Drive  ")
 
     root.mainloop()
+
+
+# ---------------------------------------------------------------------------
+# Aba 4 — Google Drive
+# ---------------------------------------------------------------------------
+
+class GDriveTab(tk.Frame):
+    def __init__(self, parent):
+        super().__init__(parent, bg=PANEL_BG)
+        self._build()
+
+    def _build(self):
+        # Sincronização rápida
+        s1 = section_frame(self, "Sincronização")
+        s1.pack(fill="x", padx=16, pady=(16, 6))
+        row1 = tk.Frame(s1, bg=PANEL_BG)
+        row1.pack(padx=10, pady=10)
+        styled_button(row1, "Status",      self._do_status,  color=ACCENT).pack(side="left", padx=5)
+        styled_button(row1, "Push ↑",      self._do_push,    color=PURPLE).pack(side="left", padx=5)
+        styled_button(row1, "Pull ↓",      self._do_pull,    color=GREEN).pack(side="left", padx=5)
+        styled_button(row1, "Log Drive",   self._do_log,     color=YELLOW).pack(side="left", padx=5)
+
+        # Pull por hash específico
+        s2 = section_frame(self, "Restaurar commit específico")
+        s2.pack(fill="x", padx=16, pady=6)
+        row2 = tk.Frame(s2, bg=PANEL_BG)
+        row2.pack(padx=10, pady=10, fill="x")
+        styled_label(row2, "Hash:").pack(side="left")
+        self.hash_entry = styled_entry(row2, 20)
+        self.hash_entry.pack(side="left", padx=(8, 10))
+        styled_button(row2, "Pull este commit", self._do_pull_hash, color=GREEN).pack(side="left")
+        tk.Label(row2, text="  (aceita prefixo)", bg=PANEL_BG, fg=MUTED, font=FONT_UI).pack(side="left")
+
+        # Guia
+        s3 = section_frame(self, "Configuração")
+        s3.pack(fill="x", padx=16, pady=6)
+        tk.Label(
+            s3,
+            text="Coloque o credentials.json na pasta de instalação do mygit.\n"
+                 "Execute 'mygit gdrive-setup' no terminal para o guia completo.",
+            bg=PANEL_BG, fg=MUTED, font=FONT_UI, justify="left"
+        ).pack(padx=10, pady=8, anchor="w")
+
+        # Output
+        self.out = make_output_box(self, height=12)
+        self.out.pack(fill="both", expand=True, padx=16, pady=(4, 16))
+
+    def _run(self, fn_name, **kwargs):
+        try:
+            from core import gdrive
+            fn     = getattr(gdrive, fn_name)
+            result = fn(**kwargs)
+            # gdrive_log retorna lista
+            if isinstance(result, list):
+                return result
+            color = RED if ("CONFLITO" in result or "não encontrado" in result.lower()) else GREEN
+            _output(self.out, result, color)
+        except ImportError:
+            _output(self.out,
+                "Bibliotecas não instaladas.\n"
+                "Execute: pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib",
+                RED)
+        except (FileNotFoundError, ValueError) as e:
+            _output(self.out, str(e), RED)
+        except Exception as e:
+            _output(self.out, f"Erro inesperado: {e}", RED)
+        return None
+
+    def _do_status(self):
+        _clear(self.out)
+        self._run("gdrive_status")
+
+    def _do_push(self):
+        _output(self.out, "Enviando para o Google Drive...", MUTED)
+        self._run("gdrive_push")
+
+    def _do_pull(self):
+        _output(self.out, "Baixando do Google Drive...", MUTED)
+        self._run("gdrive_pull")
+
+    def _do_pull_hash(self):
+        h = self.hash_entry.get().strip()
+        if not h:
+            messagebox.showwarning("mygit", "Informe o hash do commit.")
+            return
+        _output(self.out, f"Restaurando commit [{h}]...", MUTED)
+        self._run("gdrive_pull", target_hash=h)
+
+    def _do_log(self):
+        _clear(self.out)
+        _output(self.out, "Lendo commits do Drive...", MUTED)
+        commits = self._run("gdrive_log")
+        if commits is None:
+            return
+        if not commits:
+            _output(self.out, "Nenhum commit no Drive.", MUTED)
+            return
+        _clear(self.out)
+        for c in commits:
+            branch_tag = f" ({c['branch']})" if c.get("branch") else ""
+            _output(self.out, f"commit {c['hash']}{branch_tag}", YELLOW)
+            _output(self.out, f"Autor: {c['author']}  |  {c['timestamp'][:19]}", MUTED)
+            _output(self.out, f"  {c['message']}", TEXT_FG)
+            _output(self.out, "─" * 44, MUTED)
 
 
 if __name__ == "__main__":

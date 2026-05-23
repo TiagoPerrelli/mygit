@@ -131,10 +131,22 @@ def _load_commit(commit_hash: str) -> dict:
 
 
 def _list_staging_files() -> list[str]:
-    """Retorna os arquivos atualmente na área de stage."""
+    """
+    Retorna os caminhos relativos de todos os arquivos no stage,
+    descendo recursivamente em subpastas (necessário para 'add .').
+    Os caminhos são relativos à raiz do STAGING_DIR.
+    Ex: ['main.py', 'src/utils/helper.py']
+    """
     if not os.path.isdir(STAGING_DIR):
         return []
-    return os.listdir(STAGING_DIR)
+    result = []
+    for dirpath, _, filenames in os.walk(STAGING_DIR):
+        for fname in filenames:
+            full = os.path.join(dirpath, fname)
+            # Normaliza separadores para forward slash (consistência entre OSes)
+            rel  = os.path.relpath(full, STAGING_DIR).replace("\\", "/")
+            result.append(rel)
+    return result
 
 
 def _ancestors(commit_hash: str | None) -> set[str]:
@@ -186,22 +198,91 @@ def init(author: str = "Anônimo") -> str:
     )
 
 
+def _read_mygitignore() -> list[str]:
+    """
+    Lê o .mygitignore da raiz do projeto e retorna os padrões a ignorar.
+    Linhas em branco e comentários (#) são descartados.
+    """
+    ignore_file = ".mygitignore"
+    if not os.path.isfile(ignore_file):
+        return []
+    with open(ignore_file, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+    return [l.strip() for l in lines if l.strip() and not l.startswith("#")]
+
+
+def _is_ignored(path: str, patterns: list[str]) -> bool:
+    """
+    Verifica se um caminho deve ser ignorado com base nos padrões
+    do .mygitignore. Suporta wildcards via fnmatch (ex: *.pyc).
+    """
+    import fnmatch
+    name = os.path.basename(path)
+    for pattern in patterns:
+        if fnmatch.fnmatch(name, pattern) or fnmatch.fnmatch(path, pattern):
+            return True
+    return False
+
+
 def add(filepath: str) -> str:
     """
-    Adiciona um arquivo à área de stage.
+    Adiciona um arquivo ou diretório à área de stage.
 
-    Copia o arquivo para .mygit/staging/, preservando seu nome.
+    - add arquivo.txt  -> adiciona um arquivo específico
+    - add .            -> adiciona tudo recursivamente, ignorando
+                         .mygit/ e padrões do .mygitignore
+
+    Caminhos relativos são preservados em staging/ para que
+    arquivos de subpastas não causem colisões de nome.
     """
     _require_repo()
 
-    if not os.path.isfile(filepath):
-        raise FileNotFoundError(f"Arquivo '{filepath}' não encontrado.")
+    ignore_patterns = _read_mygitignore()
+    ALWAYS_IGNORE = {MYGIT_DIR, ".git"}
 
-    filename = os.path.basename(filepath)
-    dest = os.path.join(STAGING_DIR, filename)
-    shutil.copy2(filepath, dest)
+    def _stage_file(src: str) -> None:
+        rel  = os.path.relpath(src)
+        dest = os.path.join(STAGING_DIR, rel)
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        shutil.copy2(src, dest)
 
-    return f"'{filename}' adicionado ao stage."
+    # --- Caso 1: pasta (inclui ".") ---
+    if os.path.isdir(filepath):
+        added, skipped = [], []
+        for dirpath, dirnames, filenames in os.walk(filepath):
+            # Prune: remove pastas ignoradas da travessia (modifica in-place)
+            dirnames[:] = [
+                d for d in dirnames
+                if d not in ALWAYS_IGNORE
+                and not _is_ignored(os.path.join(dirpath, d), ignore_patterns)
+            ]
+            for fname in filenames:
+                full = os.path.join(dirpath, fname)
+                rel  = os.path.relpath(full)
+                if _is_ignored(rel, ignore_patterns):
+                    skipped.append(rel)
+                    continue
+                _stage_file(full)
+                added.append(rel)
+
+        if not added:
+            return "Nenhum arquivo encontrado para adicionar."
+
+        lines_out = [f"  + {f}" for f in added]
+        if skipped:
+            lines_out.append(f"  (ignorados: {len(skipped)} arquivo(s))")
+        return f"{len(added)} arquivo(s) adicionado(s) ao stage:\n" + "\n".join(lines_out)
+
+    # --- Caso 2: arquivo individual ---
+    if os.path.isfile(filepath):
+        rel = os.path.relpath(filepath)
+        if _is_ignored(rel, ignore_patterns):
+            return f"'{rel}' está no .mygitignore — ignorado."
+        _stage_file(filepath)
+        return f"'{rel}' adicionado ao stage."
+
+    raise FileNotFoundError(f"'{filepath}' não é um arquivo nem uma pasta válida.")
+
 
 
 def commit(message: str) -> str:
@@ -223,10 +304,13 @@ def commit(message: str) -> str:
     branch = _read_current_branch()
 
     snapshot: dict[str, str] = {}
-    for filename in staged:
-        path = os.path.join(STAGING_DIR, filename)
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
-            snapshot[filename] = f.read()
+    for rel_path in staged:
+        # rel_path pode ser "main.py" ou "src/utils/helper.py"
+        # sempre usamos forward slash como chave para consistência entre OSes
+        key  = rel_path.replace("\\", "/")
+        full = os.path.join(STAGING_DIR, rel_path)
+        with open(full, "r", encoding="utf-8", errors="replace") as f:
+            snapshot[key] = f.read()
 
     timestamp = datetime.now().isoformat()
     raw = f"{message}{author}{timestamp}{json.dumps(snapshot)}"
