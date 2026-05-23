@@ -28,11 +28,7 @@ python mygit.py status
 
 # Exibe o histórico de commits da branch ativa
 python mygit.py log
-```
 
-### Arquivos
-
-```bash
 # Adiciona um arquivo ao stage
 python mygit.py add arquivo.txt
 
@@ -44,11 +40,7 @@ python mygit.py commit -m "mensagem do commit"
 
 # Compara um arquivo com a versão do último commit
 python mygit.py diff arquivo.txt
-```
 
-### Branches
-
-```bash
 # Lista todas as branches (* indica a ativa)
 python mygit.py branch
 
@@ -60,13 +52,7 @@ python mygit.py branch --checkout nome-da-branch
 
 # Faz merge de uma branch na branch ativa
 python mygit.py merge nome-da-branch
-```
 
-> O merge usa o algoritmo **three-way merge**. Se houver conflito (mesmo arquivo alterado de formas diferentes nas duas branches), o merge é abortado e os arquivos conflitantes são listados.
-
-### Remoto local
-
-```bash
 # Define uma pasta local como repositório remoto
 python mygit.py remote ./caminho/do/remoto
 
@@ -75,11 +61,7 @@ python mygit.py push
 
 # Baixa commits do remoto para o local
 python mygit.py pull
-```
 
-### Google Drive
-
-```bash
 # Exibe o guia completo de configuração
 python mygit.py gdrive-setup
 
